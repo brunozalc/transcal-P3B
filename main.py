@@ -49,11 +49,13 @@ class Truss:
     def __init__(self):
         self.nodes = []
         self.elements = []
+        self.yield_stress = 250e6  # tensão de escoamento
+        self.buckling_factor = 1.0  # fator de segurança
 
     def add_node(self, id, x, y, constraints=[False, False], forces=[0, 0]):
         self.nodes.append(Node(id, x, y, constraints, forces))
 
-    def add_element(self, id, node1_id, node2_id, elasticity=210e9, area=2e-4):
+    def add_element(self, id, node1_id, node2_id, elasticity=200e9, area=6e-5):
         node1 = next(node for node in self.nodes if node.id ==
                      node1_id)  # busca o nó com id node1_id
         node2 = next(node for node in self.nodes if node.id ==
@@ -145,7 +147,22 @@ class Truss:
                 idx = node.dof[1]
                 reactions[idx] -= f_global[idx]
 
+        self.analyze_stresses(stresses)
+
         return stresses, reactions
+
+    def analyze_stresses(self, stresses):
+        for i, stress in enumerate(stresses):
+            if abs(stress) > self.yield_stress:
+                print(
+                    f"Elemento {i + 1} falha por tensão: Stress = {stress:.2e} Pa, Yield Stress = {self.yield_stress:.2e} Pa")
+
+            if stress < 0:  # sob compressão
+                critical_load = (np.pi ** 2 * self.elements[i].elasticity *
+                                 self.elements[i].area) / (self.buckling_factor * self.elements[i].length() ** 2)
+                if abs(stress) > critical_load:
+                    print(
+                        f"Elemento {i + 1} falha por flambagem: Stress = {stress:.2e} Pa, Critical Load = {critical_load:.2e} Pa")
 
     def plot(self, u, stresses, reactions):
         plt.figure(figsize=(12, 8))
